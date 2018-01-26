@@ -11,8 +11,16 @@ import UIKit
 class TodolistViewController: UITableViewController {
     
     var itemArray = ["Find Mike", "Buy Eggos", "Destroy Demogorgon"]
+    
+    let defaults = UserDefaults.standard // using user default to save data
+    
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        // to display the recent change
+        if let items = defaults.array(forKey: "TodoListArray") as? [String]{ // if this works
+            itemArray = items //then do this
+        }
         
     }
 
@@ -56,6 +64,8 @@ class TodolistViewController: UITableViewController {
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
             //What will happen when the user clicks the Add Item button on our UIAlert
             self.itemArray.append(textField.text!)
+            
+            self.defaults.set(self.itemArray, forKey: "TodoListArray") // using user default
             self.tableView.reloadData() // reloading the data so that it can reflects the changes in the array
         }
         

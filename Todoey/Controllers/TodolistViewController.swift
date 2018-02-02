@@ -7,19 +7,27 @@
 //
 
 import UIKit
+import CoreData
 
-class TodolistViewController: UITableViewController {
+class TodolistViewController: UITableViewController{
     
     var itemArray = [Item]()
     
-    // creating my own plist
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    var selectedCategory : Category?{
+        didSet{
+            loadItems()
+        }
+    }
+    
+    
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        print(dataFilePath)
+        print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
         
-        loadItems()
+        
+        
         
 
         
@@ -54,6 +62,9 @@ class TodolistViewController: UITableViewController {
         //print(itemArray[indexPath.row])
         itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         
+        //context.delete(itemArray[indexPath.row])
+        //itemArray.remove(at: indexPath.row)
+        
         saveItems()
 
         tableView.deselectRow(at: indexPath, animated: true) // check and fade away animation
@@ -69,8 +80,12 @@ class TodolistViewController: UITableViewController {
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
             //What will happen when the user clicks the Add Item button on our UIAlert
             
-            let newItem = Item()
+            
+            
+            let newItem = Item(context: self.context)
             newItem.title = textField.text!
+            newItem.done = false
+            newItem.parentCategory = self.selectedCategory
             self.itemArray.append(newItem)
             
             self.saveItems()
@@ -87,30 +102,66 @@ class TodolistViewController: UITableViewController {
     // Mark - Model Manupulation Methods
     
     func saveItems(){
-        let encoder = PropertyListEncoder()
         do{
-            let data = try encoder.encode(itemArray)
-            try data.write(to: dataFilePath!)
-        } catch{
-            print("Error encoding item array , \(error)")
+            try context.save()
             
+        } catch{
+            print("Error saving context \(error)")
+            
+            
+        }
+        self.tableView.reloadData()
+        
+    }
+    
+    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), predicate: NSPredicate? = nil){
+        
+        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", (selectedCategory?.name)!)
+        
+        if let additionalPredicate = predicate{
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates:[categoryPredicate,predicate!])
+        }else{
+            request.predicate = categoryPredicate
+        }
+        
+        
+        do{
+            itemArray = try context.fetch(request)
+        }catch{
+            print("Error fetching data from context \(error)")
         }
         tableView.reloadData()
         
     }
     
-    func loadItems(){
+}
+
+// MARK: - Search Bar methods
+
+extension TodolistViewController: UISearchBarDelegate{
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        let request : NSFetchRequest<Item> = Item.fetchRequest()
         
-        if let data = try? Data(contentsOf: dataFilePath!){
-            let decoder = PropertyListDecoder()
-            do{
-                itemArray = try decoder.decode([Item].self, from: data)
-            }catch{
-                print("Error decoding itemArray, \(error)")
+        let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!) // querying
+        // [cd] -> to make case and diacritic insensitive
+ 
+        
+        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)] //ascending -> alphabetical order
+        loadItems(with: request, predicate: predicate)
+        // hard to read when (request: request) so... -> (with : request)
+        
+        
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if(searchBar.text?.count == 0){
+            loadItems()
+            
+            DispatchQueue.main.async { // bring it to the main thread
+                searchBar.resignFirstResponder() // keyboard disappearing
             }
         }
     }
-    
-
 }
 
